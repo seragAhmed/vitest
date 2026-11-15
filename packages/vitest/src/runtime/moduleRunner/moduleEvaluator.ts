@@ -25,6 +25,15 @@ import { ModuleDebug } from './moduleDebug'
 
 const isWindows = process.platform === 'win32'
 
+// virtual modules with an id like "/virtual" get "file:///virtual" as their url,
+// which has no drive letter and is rejected by `createRequire` on Windows
+function toRequireFileUrl(url: string): string {
+  if (isWindows && /^file:\/\/\/(?![a-z]:)/i.test(url)) {
+    return pathToFileURL(fileURLToPath(url, { windows: false })).href
+  }
+  return url
+}
+
 // Compiled scripts of inlined modules, shared across vm contexts: vm pools
 // evaluate every module again in each fresh context, but the compiled script
 // holds no per-context state (Vite rewrites dynamic imports to
@@ -451,7 +460,10 @@ export class VitestModuleEvaluator implements ModuleEvaluator {
       _require.resolve = _require
       return _require
     }
-    return this.vm ? this.vm.externalModulesExecutor.createRequire(url) : createRequire(url)
+    const filename = toRequireFileUrl(url)
+    return this.vm
+      ? this.vm.externalModulesExecutor.createRequire(filename)
+      : createRequire(filename)
   }
 
   private shouldInterop(path: string, mod: any): boolean {
